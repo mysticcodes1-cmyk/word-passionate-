@@ -34,7 +34,11 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // Use the release keystore when signing properties are supplied.
+            // Without them, produce an unsigned APK that can be signed separately.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
         }
     }
