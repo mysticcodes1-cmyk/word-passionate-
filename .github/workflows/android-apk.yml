@@ -61,3 +61,5 @@ jobs:
         run: |
           rm -f android-app/app/word-passionate-release.jks
           rm -f android-app/keystore.properties
+
+# Keep the keystore inside the app module because Android resolves storeFile from that module.
