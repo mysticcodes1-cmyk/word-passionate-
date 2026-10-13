@@ -31,7 +31,21 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android-app/app/word-passionate-release.jks
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "KEYSTORE_BASE64 secret is empty or unavailable"; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-app/app/word-passionate-release.jks
+          test -s android-app/app/word-passionate-release.jks || { echo "Decoded keystore file is empty"; exit 1; }
+
+      - name: Validate signing keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_PASSWORD" || { echo "KEYSTORE_PASSWORD secret is empty or unavailable"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "KEY_ALIAS secret is empty or unavailable"; exit 1; }
+          keytool -list -keystore android-app/app/word-passionate-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null
+          echo "Keystore file, store password, and alias validated."
 
       - name: Create signing properties
         env:
@@ -39,6 +53,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          test -n "$KEY_PASSWORD" || { echo "KEY_PASSWORD secret is empty or unavailable"; exit 1; }
           cat > android-app/keystore.properties <<EOF
           storeFile=word-passionate-release.jks
           storePassword=$KEYSTORE_PASSWORD
