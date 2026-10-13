@@ -36,16 +36,25 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-app/app/word-passionate-release.jks
           test -s android-app/app/word-passionate-release.jks || { echo "Decoded keystore file is empty"; exit 1; }
 
-      - name: Validate signing keystore
+      - name: Diagnose and validate signing keystore
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set -euo pipefail
-          test -n "$KEYSTORE_PASSWORD" || { echo "KEYSTORE_PASSWORD secret is empty or unavailable"; exit 1; }
-          test -n "$KEY_ALIAS" || { echo "KEY_ALIAS secret is empty or unavailable"; exit 1; }
-          keytool -list -keystore android-app/app/word-passionate-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null
-          echo "Keystore file, store password, and alias validated."
+          test -n "$KEYSTORE_PASSWORD" || { echo "ERROR: KEYSTORE_PASSWORD secret is empty or unavailable"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "ERROR: KEY_ALIAS secret is empty or unavailable"; exit 1; }
+          echo "Checking whether the decoded file is a readable keystore and whether the store password is correct..."
+          if ! keytool -list -keystore android-app/app/word-passionate-release.jks -storepass "$KEYSTORE_PASSWORD"; then
+            echo "ERROR: GitHub cannot open the decoded keystore with KEYSTORE_PASSWORD. Check that KEYSTORE_BASE64 is the exact current file and KEYSTORE_PASSWORD is exact. No secret values are printed."
+            exit 1
+          fi
+          echo "Checking the requested key alias..."
+          if ! keytool -list -keystore android-app/app/word-passionate-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS"; then
+            echo "ERROR: The store opened, but KEY_ALIAS was not found or could not be accessed."
+            exit 1
+          fi
+          echo "Keystore, store password, and alias validated."
 
       - name: Create signing properties
         env:
