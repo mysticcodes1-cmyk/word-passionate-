@@ -1,4 +1,4 @@
-name: Build WORD PASSIONATE Android APK
+name: Build WORD PASSIONATE Signed Android APK
 
 on:
   workflow_dispatch:
@@ -27,20 +27,48 @@ jobs:
           test -d "$ANDROID_HOME/platforms/android-35"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
 
-      - name: Build release APK (unsigned)
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android-app/app/word-passionate-release.jks
+          test -s android-app/app/word-passionate-release.jks
+          {
+            printf 'storeFile=word-passionate-release.jks\n'
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > android-app/keystore.properties
+
+      - name: Build signed release APK
         working-directory: android-app
         run: gradle assembleRelease --no-daemon
 
-      - name: Check APK exists
+      - name: Verify APK signature
         run: |
-          test -s android-app/app/build/outputs/apk/release/app-release-unsigned.apk ||           test -s android-app/app/build/outputs/apk/release/app-release.apk
-          ls -lh android-app/app/build/outputs/apk/release/
+          set -euo pipefail
+          APK="android-app/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          ls -lh "$APK"
 
-      - name: Upload unsigned APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: WORD-PASSIONATE-Unsigned-APK
-          path: |
-            android-app/app/build/outputs/apk/release/app-release-unsigned.apk
-            android-app/app/build/outputs/apk/release/app-release.apk
+          name: WORD-PASSIONATE-Signed-APK
+          path: android-app/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      - name: Remove signing files
+        if: always()
+        run: |
+          rm -f android-app/keystore.properties
+          rm -f android-app/app/word-passionate-release.jks
